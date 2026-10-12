@@ -33,6 +33,11 @@ export function useSupabaseTable<T extends Row>(
   const lastFlushedAt = useSyncStore((s) => s.lastFlushedAt);
   const rowsRef = useRef<T[]>([]);
   rowsRef.current = rows;
+  // Each hook instance needs its own realtime channel. supabase-js hands back an
+  // existing channel for a repeated name, and adding listeners to an already-subscribed
+  // channel throws — which would white-screen the app whenever two components watch
+  // the same table at once.
+  const instanceId = useRef(crypto.randomUUID());
 
   const key = filterValue ? cacheKey(table, filterColumn, filterValue) : null;
 
@@ -72,7 +77,7 @@ export function useSupabaseTable<T extends Row>(
   useEffect(() => {
     if (!enabled || !filterValue) return;
     const channel = supabase
-      .channel(`${table}:${filterColumn}:${filterValue}`)
+      .channel(`${table}:${filterColumn}:${filterValue}:${instanceId.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table, filter: `${filterColumn}=eq.${filterValue}` },
